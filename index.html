@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+<script src="jquery.js"></script>
+<script src="map.js"></script>
+<script>
+function resetTiles(m) {
+  m.forEachTile(function(nm,t) {
+    t.dim(false)
+    t.dom().css('cursor','default')
+    t.dom().click(null)
+  })
+}
+
+function chooseTile(m, ts) {
+  m.forEachTile(function(nm,t) {
+    var inArr = jQuery.inArray(nm, ts) != -1
+    t.dim(!inArr)
+    if (inArr) {
+      t.dom().css('cursor','pointer')
+      t.dom().click(function() {
+        console.log(nm)
+        resetTiles(m)
+      })
+    }
+
+  })
+}
+
+$(document).ready(function() {
+  var b = $('body')
+  var m = newMap(800,600)
+  m.drawTile(0,0,'1A')
+  m.drawTile(1,0,'5B')
+  m.drawTile(-1,1,'14A')
+  m.drawTile(-2,1,'15A')
+  m.drawTile(-1,2,'20A')
+
+  chooseTile(m, ['14A','1A'])
+
+  b.append(m.getContainer())
+})
+</script>
+</head>
+<body>
+</body>
+</html>
+
+
