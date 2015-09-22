@@ -100,6 +100,7 @@ data ActionType = Invokation
                 | Exploration
 
 data Event      = WhenAnyoneUnravels
+                | WhenIUravel
                 | WhenIBegin
                 | OnMyTurnOnce
                 | WhenIEnd
