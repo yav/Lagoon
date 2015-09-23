@@ -5,6 +5,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.List(nub)
 
 
 data Dir = N | NE | SE | S | SW | NW
@@ -51,6 +52,14 @@ removeCell l b = Map.delete l b
 -- | Which neighbourhoods are connected.
 neighbours :: Board a -> Loc -> [Loc]
 neighbours b l = [ l' | l' <- neighbourhood l, l' `Map.member` b ]
+
+neighboursN :: Board a -> Int -> Loc -> [Loc]
+neighboursN b n l
+  | n > 1     = let ls = neighbours b l
+                in nub (ls ++ [ x | l' <- ls, x <- neighboursN b (n-1) l'
+                                  , x /= l ])
+  | otherwise = neighbours b l
+
 
 
 -- | The ste of locations reachable from any of the input locations.

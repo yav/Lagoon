@@ -47,7 +47,15 @@ data Player = Player
   , playerDruids      :: [ActiveDruid]
   }
 
+readyDruids :: Player -> [Int]
+readyDruids p =
+  [ n | (n, ActiveDruid { druidState = Ready }) <-
+                                              zip [ 0 .. ] (playerDruids p) ]
 
+exhaustedDruids :: Player -> [Int]
+exhaustedDruids p =
+  [ n | (n, ActiveDruid { druidState = Exhausted }) <-
+                                              zip [ 0 .. ] (playerDruids p) ]
 
 
 exile :: Int -> Player -> Player
@@ -109,6 +117,7 @@ data Event      = WhenAnyoneUnravels
 
 --------------------------------------------------------------------------------
 
+{-
 places :: Map PlaceId Place
 places = Map.fromList
   [
@@ -125,7 +134,6 @@ places = Map.fromList
   ]
 
 
-{-
 
 move = do druid <- chooseReadyDruid
           dir   <- chooseMoveDir (only dir with placlas)
