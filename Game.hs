@@ -58,18 +58,33 @@ exhaustedDruids p =
                                               zip [ 0 .. ] (playerDruids p) ]
 
 
-exile :: Int -> Player -> Player
-exile n p =
-  case splitAt n (playerDruids p) of
-    (as,b:bs) -> p { playerSupply = bagAdd 1 (druidType b) (playerSupply p)
-                   , playerDruids = as ++ bs
-                   }
-    _ -> p
+exileDruid :: Int -> Player -> Maybe Player
+exileDruid n p =
+  do (as,b:bs) <- return $ splitAt n (playerDruids p)
+     return p { playerSupply = bagAdd 1 (druidType b) (playerSupply p)
+              , playerDruids = as ++ bs
+              }
+
+summonDruid :: Druid -> Loc -> Player -> Maybe Player
+summonDruid druid loc p =
+  do newSupply <- bagRemove 1 druid (playerSupply p)
+     return p { playerSupply = newSupply
+              , playerDruids = ActiveDruid { druidType     = druid
+                                           , druidState    = Exhausted
+                                           , druidLocation = loc
+                                           } : playerDruids p }
+
+moveDruid :: Int -> Loc -> Player -> Maybe Player
+moveDruid n newLoc p =
+  do (as,b:bs) <- return (splitAt n (playerDruids p))
+     return p { playerDruids = as ++ b { druidLocation = newLoc } : bs }
+
 
 data Druid        = Acolyte | Elder
                     deriving (Eq,Ord)
 
 data DruidState   = Ready | Exhausted
+
 data ActiveDruid  = ActiveDruid
   { druidType     :: Druid
   , druidState    :: DruidState
@@ -93,7 +108,7 @@ data Place = Place { placeEnergy   :: Energy
                    , placeName     :: String
                    }
 
-data PlaceId     = PlaceId { cellNumnber :: Int, cellSide :: Side }
+data PlaceId    = PlaceId { cellNumnber :: Int, cellSide :: Side }
                   deriving (Eq,Ord)
 
 data Side       = A | B
@@ -101,6 +116,8 @@ data Side       = A | B
 
 data Energy     = Yellow | Red | Blue
                   deriving (Eq,Ord)
+
+data LocType    = Allay | Haven | Sanctum | Shrine | Trove
 
 data ActionType = Invokation
                 | EldridInvokation
@@ -115,45 +132,29 @@ data Event      = WhenAnyoneUnravels
                 | WhenSuplyEmpty
                 | OnMyActionOnce
 
+
+data Path       = Adventure | Renewal | Presence | Mystery
+data Circle     = Stag | Dragonfly
+                | Hare | Owl
+                | Fern | Turtle
+                | Mushroom | Moon
+
+pathOf :: Circle -> Path
+pathOf c =
+  case c of
+    Stag      -> Adventure
+    Dragonfly -> Adventure
+    Hare      -> Renewal
+    Owl       -> Renewal
+    Fern      -> Presence
+    Turtle    -> Presence
+    Mushroom  -> Mystery
+    Moon      -> Mystery
+
+
 --------------------------------------------------------------------------------
-
-{-
-places :: Map PlaceId Place
-places = Map.fromList
-  [
-
-  , ( PlaceId 5 B
-    , Place { placeEnergy   = Blue
-            , placeIsHaven  = False
-            , placeGroup    = 2
-            , placeName     = "Musing Kinoko"
-            }
-    )
-
-
-  ]
+-- AJ
 
 
 
-move = do druid <- chooseReadyDruid
-          dir   <- chooseMoveDir (only dir with placlas)
-          tryToMove druid dir
-          -- exhaust druid
-
-summon = do d1 <- pickReadyDruid
-            d <- pickDruidFromSupply 
-                  (only need to know Eldrid/Acolyte if this is an option)
-            h <- pickHaven (if there is more than one)
-
-
-explore = do druid <- chooseReadyDruid
-             dr <- chooseDir (only dir with no places)
-             bool <- shouldWeMoveToNewSite
-             exhause druid and player marker
-
-siteAction =
-  do chooseOneOfOurCouupiedSites
-
-
--}
 
