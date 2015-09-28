@@ -3,20 +3,47 @@ function newMap(viewWidth, viewHeight) {
 
   var tileWidth   = 250
   var tileHeight  = tileWidth / 1.16
+  var origX       = 0
+  var origY       = 0
 
   var tiles       = newArray2d()
   var druids      = {}
+
+  var scrollStartX = null
+  var scrollStartX = null
 
   var container = $('<div/>')
                   .css('position', 'relative')
                   .css('width',  viewWidth + 'px')
                   .css('height', viewHeight + 'px')
                   .css('background-color', 'black')
-                  .css('overflow', 'scroll')
+                  .css('overflow', 'hidden')
+                  .css('user-select', 'none')
+  container
+  .mousedown(function(ev) { scrollStartX = ev.pageX
+                            scrollStartY = ev.pageY
+                            container.css('cursor','all-scroll')
+                          })
+  .mouseup(function(ev) {
+              if (scrollStartX === null) return
+              if (scrollStartY === null) return
+              var dx = ev.pageX - scrollStartX
+              var dy = ev.pageY - scrollStartY
+              scroll(-dx, -dy)
+              container.css('cursor','auto')
+  })
+
+  function scroll(dx,dy) {
+    origX = origX + dx
+    origY = origY + dy
+    tiles.each(function(tX,tY,t) {
+      t.animate({ left: '+=' + dx, top: '+=' + dy })
+    })
+  }
 
   function tileCoord(x,y) {
-    var offX = (viewWidth - tileWidth) / 2
-    var offY = (viewHeight - tileHeight) / 2
+    var offX = origX + (viewWidth - tileWidth) / 2
+    var offY = origY + (viewHeight - tileHeight) / 2
 
     return { x: offX + x * (0.75 * tileWidth)
            , y: offY -(y * tileHeight + x * (0.5 * tileHeight))
@@ -26,6 +53,7 @@ function newMap(viewWidth, viewHeight) {
 
   function positionTile(x,y,t) {
     var loc = tileCoord(x,y)
+    console.log(loc)
     return t.css('left', loc.x + 'px')
             .css('top', loc.y + 'px')
   }
@@ -204,7 +232,9 @@ function newMap(viewWidth, viewHeight) {
         h.addClass('selector')
          .click(function() {
             jQuery.each(choosers, function(ix,d) { d.remove() })
-            k(loc) })
+            k(loc)
+            return false
+        })
         container.append(h)
         choosers.push(h)
       })
@@ -225,6 +255,7 @@ function newMap(viewWidth, viewHeight) {
          .click(function() {
             jQuery.each(choosers, function(ix,c) { c.remove() })
             k(nm)
+            return false
          })
       })
     },

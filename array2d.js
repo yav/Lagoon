@@ -3,6 +3,11 @@ function newArray2d () {
   var content = []
 
   return {
+    each: function(f) {
+      jQuery.each(content, function(x,row) {
+        jQuery.each(row, function(y, v) { f(x,y,v) })
+      })
+    },
 
     getElem: function(x,y) {
       if (content[x] === undefined) return null
