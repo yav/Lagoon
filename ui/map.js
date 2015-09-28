@@ -53,7 +53,6 @@ function newMap(viewWidth, viewHeight) {
 
   function positionTile(x,y,t) {
     var loc = tileCoord(x,y)
-    console.log(loc)
     return t.css('left', loc.x + 'px')
             .css('top', loc.y + 'px')
   }
