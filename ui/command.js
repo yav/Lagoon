@@ -1,7 +1,7 @@
 
 function command(m) {
 
-  function again() { console.log('again'); setTimeout(function() { command(m) }, 0) }
+  function again() { setTimeout(function() { command(m) }, 0) }
 
   jQuery.post('/step', {}, function(cmd) {
 
@@ -17,7 +17,6 @@ function command(m) {
       case 'moveDriud':     m.moveDriud(cmd[1], cmd[2]); again(); break
       case 'setDruidState': m.setDruidState(cmd[1], cmd[2]); again(); break
       case 'chooseTile':    m.chooseTile(cmd[1], function(loc) {
-                                console.log(loc)
                                 jQuery.post('/step', loc)
                                 again()
                             })

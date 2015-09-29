@@ -40,13 +40,9 @@ data I a  = GetText (Text -> I a)
           | Call Cmd (I a)
           | Return a
 
-stop :: I ()
-stop = Return ()
-
 
 instance Functor I where
   fmap = liftM
-
 
 instance Applicative I where
   pure = return
