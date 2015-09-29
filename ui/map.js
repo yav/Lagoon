@@ -9,6 +9,7 @@ function newMap(viewWidth, viewHeight) {
   var tiles       = newArray2d()
   var druids      = {}
 
+  var choosers = []
   var scrollStartX = null
   var scrollStartX = null
 
@@ -22,6 +23,7 @@ function newMap(viewWidth, viewHeight) {
   container
   .mousedown(function(ev) { scrollStartX = ev.pageX
                             scrollStartY = ev.pageY
+                            container.css('cursor','all-scroll')
                           })
   .mousemove(function(ev) {
               if (scrollStartX === null) return
@@ -42,25 +44,28 @@ function newMap(viewWidth, viewHeight) {
     origY = origY + dy
     tiles.each(function(tX,tY,t) {
       var p = t.position()
-      container.css('cursor','all-scroll')
       t.animate({ left: '+=' + dx, top: '+=' + dy }, 0)
+    })
+    jQuery.each(choosers, function(ix,c) {
+      var p = c.position()
+      c.animate({ left: '+=' + dx, top: '+=' + dy }, 0)
     })
   }
 
-  function tileCoord(x,y) {
+  function tileCoord(loc) {
     var offX = origX + (viewWidth - tileWidth) / 2
     var offY = origY + (viewHeight - tileHeight) / 2
 
-    return { x: offX + x * (0.75 * tileWidth)
-           , y: offY -(y * tileHeight + x * (0.5 * tileHeight))
+    return { x: offX + loc.x * (0.75 * tileWidth)
+           , y: offY -(loc.y * tileHeight + loc.x * (0.5 * tileHeight))
            }
   }
 
 
-  function positionTile(x,y,t) {
-    var loc = tileCoord(x,y)
-    return t.css('left', loc.x + 'px')
-            .css('top', loc.y + 'px')
+  function positionTile(loc,t) {
+    var loc1 = tileCoord(loc)
+    return t.css('left', loc1.x + 'px')
+            .css('top', loc1.y + 'px')
   }
 
   function drawHex() {
@@ -91,8 +96,8 @@ function newMap(viewWidth, viewHeight) {
 
   return {
 
-    appear: function(x,y,nm) {
-      var t = positionTile(x,y, drawHex())
+    appear: function(loc,nm) {
+      var t = positionTile(loc, drawHex())
               .css('background-color', "rgba(0,0,0,0)")
               .css('background-image', 'url("img/' + nm + '.png")')
               .css('background-size', tileWidth + 'px')
@@ -109,22 +114,22 @@ function newMap(viewWidth, viewHeight) {
 
 
       t.append(inhabitants)
-      var old = tiles.setElem(x,y,t)
+      var old = tiles.setElem(loc.x,loc.y,t)
       if (old !== null) old.remove()
       container.append(t)
       t.fadeIn('slow')
     },
 
-    disappear: function(x,y) {
-      var t = tiles.removeElem(x,y)
+    disappear: function(loc) {
+      var t = tiles.removeElem(loc.x,loc.y)
       if (t === null) return
       t.fadeOut('slow', function() { t.remove() })
     },
 
-    swapTiles: function(x1,y1, x2,y2) {
-      var t1 = tiles.getElem(x1,y1)
+    swapTiles: function(loc1, loc2) {
+      var t1 = tiles.getElem(loc1.x,loc1.y)
       if (t1 === null) return
-      var t2 = tiles.getElem(x2,y2)
+      var t2 = tiles.getElem(loc2.x,loc2.y)
       if (t2 === null) return
 
       var left1 = t1.css('left')
@@ -140,28 +145,28 @@ function newMap(viewWidth, viewHeight) {
                    , 'slow'
                    , 'swing'
                    , function() {
-          tiles.setElem(x2,y2,t1)
-          tiles.setElem(x1,y1,t2)
+          tiles.setElem(loc2.x,loc2.y)
+          tiles.setElem(loc1.x,loc1.y)
         })
       })
 
     },
 
-    moveTile: function(xFrom,yFrom, xTo, yTo) {
-      var t1 = tiles.removeElem(xFrom,yFrom)
+    moveTile: function(from,to) {
+      var t1 = tiles.removeElem(from.x,from.y)
       if (t1 === null) return
 
-      var t2 = tiles.removeElem(xTo,yTo)
+      var t2 = tiles.removeElem(to.x,to.y)
       if (t2 !== null) t2.remove()
-      var loc = tileCoord(xTo,yTo)
+      var loc = tileCoord(to)
 
       t1.css('z-index','100')
       t1.animate ({ left: loc.x, top: loc.y }, 'slow', 'swing',
         function() { t1.css('z-index','0'); tiles.setElem(xTo,yTo,t1) })
     },
 
-    addDruid: function(nm, x, y, circle, isSmall, isReady) {
-      var t = tiles.getElem(x,y)
+    addDruid: function(nm, loc, circle, isSmall, isReady) {
+      var t = tiles.getElem(loc.x,loc.y)
       if (t === null) return
       if (druids[nm] !== undefined) return
 
@@ -183,7 +188,9 @@ function newMap(viewWidth, viewHeight) {
       dom.fadeOut('slow', function() { dom.remove(); druids[nm] = undefined })
     },
 
-    moveDriud: function(nm, x, y) {
+    moveDriud: function(nm, loc) {
+      var x = loc.x
+      var y = loc.y
       var d = druids[nm]
       if (d === undefined) return
       var t = tiles.getElem(x,y)
@@ -229,11 +236,11 @@ function newMap(viewWidth, viewHeight) {
 
     // [Loc] -> Loc
     chooseTile: function(locs,k) {
-      var choosers = []
+      choosers = []
 
       jQuery.each(locs, function(ix,loc) {
         var h = drawHex()
-        positionTile(loc.x,loc.y,h)
+        positionTile(loc,h)
         h.addClass('selector')
          .click(function() {
             jQuery.each(choosers, function(ix,d) { d.remove() })
