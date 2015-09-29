@@ -4,6 +4,7 @@
 <script src="jquery.js"></script>
 <script src="array2d.js"></script>
 <script src="map.js"></script>
+<script src="command.js"></script>
 <style>
 .selector:hover {
 }
@@ -17,11 +18,15 @@
 $(document).ready(function() {
   var b = $('body')
   m = newMap(800,600)
-  m.appear(0,0,'1A')
-  m.appear(1,0,'2A')
-  m.addDruid('x1', 0, 0, 'hare', true, true)
-  m.addDruid('x2', 1, 0, 'hare', true, true)
   b.append(m.getContainer())
+  command(m)
+
+  /*
+  m.appear({x:0,y:0},'1A')
+  m.appear({x:1,y:0},'2A')
+  m.addDruid('x1', {x:0, y:0}, 'hare', true, true)
+  m.addDruid('x2', {x:1, y:0}, 'hare', true, true)
+  */
 })
 </script>
 </head>

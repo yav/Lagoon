@@ -1,3 +1,5 @@
+module Game where
+
 import Bag
 import Board
 import Data.Set (Set)
