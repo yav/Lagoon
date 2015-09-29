@@ -22,22 +22,28 @@ function newMap(viewWidth, viewHeight) {
   container
   .mousedown(function(ev) { scrollStartX = ev.pageX
                             scrollStartY = ev.pageY
-                            container.css('cursor','all-scroll')
                           })
-  .mouseup(function(ev) {
+  .mousemove(function(ev) {
               if (scrollStartX === null) return
               if (scrollStartY === null) return
               var dx = ev.pageX - scrollStartX
               var dy = ev.pageY - scrollStartY
+              scrollStartX = ev.pageX
+              scrollStartY = ev.pageY
               scroll(-dx, -dy)
-              container.css('cursor','auto')
   })
+  .mouseup(function() {
+    scrollStartX = null
+    scrollStartY = null
+    container.css('cursor','auto') })
 
   function scroll(dx,dy) {
     origX = origX + dx
     origY = origY + dy
     tiles.each(function(tX,tY,t) {
-      t.animate({ left: '+=' + dx, top: '+=' + dy })
+      var p = t.position()
+      container.css('cursor','all-scroll')
+      t.animate({ left: '+=' + dx, top: '+=' + dy }, 0)
     })
   }
 
