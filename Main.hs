@@ -14,14 +14,9 @@ import           Snap.Util.FileServe(serveDirectory)
 import           Data.ByteString(ByteString)
 import qualified Data.ByteString as BS
 import           Data.Text (Text)
-import           Data.Text.Encoding(decodeUtf8)
-import           Data.Text.Read(decimal)
-import qualified Data.Text as Text
-import           Data.IORef ( IORef, newIORef, writeIORef, atomicModifyIORef'
-                            , readIORef )
+import           Data.IORef ( IORef, newIORef, writeIORef, readIORef )
 
 import           Control.Applicative ((<|>))
-import           Control.Monad
 import           Control.Monad.IO.Class(liftIO)
 
 
@@ -38,117 +33,59 @@ main =
        , ("reset", liftIO (writeIORef s it))
        ] <|> serveDirectory "ui"
 
-data I a  = GetText (Text -> I a)
-          | GetLoc (Loc -> I a)
-          | Call Cmd (I a)
-          | Return a
-
-
-instance Functor I where
-  fmap = liftM
-
-instance Applicative I where
-  pure = return
-  (<*>) = ap
-
-instance Monad I where
-  return = Return
-  Return a >>= k  = k a
-  Call x k >>= f  = Call x (k >>= f)
-  GetText k >>= f = GetText $ \a -> k a >>= f
-  GetLoc k >>= f  = GetLoc  $ \a -> k a >>= f
 
 snapStep :: IORef (I ()) -> Snap ()
 snapStep s =
-  do w <- liftIO (readIORef s)
-     case w of
-       GetText k -> do txt <- textParam "next"
-                       liftIO (writeIORef s (k txt))
-       GetLoc k  -> do x <- intParam "x"
-                       y <- intParam "y"
-                       liftIO (writeIORef s (k (Loc x y)))
-       Call cmd k -> do sendJSON cmd
-                        liftIO (writeIORef s k)
-       Return ()  -> return ()
+  do w  <- liftIO (readIORef s)
+     w1 <- snapStepI w
+     liftIO (writeIORef s w1)
+
 
 data Loc  = Loc Int Int
-data Cmd  = Cmd Text [Value]
-
-instance Export Cmd where
-  toJS (Cmd txt vs) = toJS (toJS txt : vs)
 
 instance Export Loc where
   toJS (Loc x y) = object [ "x" .= x, "y" .= y ]
 
+instance Import Loc where
+  fromJS = withObject $ \o -> do x <- o .: "x"
+                                 y <- o .: "y"
+                                 return (Loc x y)
 
-class MkCmd a where
-  mkCmd :: Text -> [Value] -> a
-
-class MkRes a where
-  mkRes :: I a
-
-instance MkRes a => MkCmd (I a) where
-  mkCmd txt xs = Call (Cmd txt (reverse xs)) mkRes
-
-instance MkRes () where
-  mkRes = Return ()
-
-instance MkRes Text where
-  mkRes = GetText Return
-
-instance MkRes Loc where
-  mkRes = GetLoc Return
-
-instance (Export a, MkCmd b) => MkCmd (a -> b) where
-  mkCmd txt xs = \x -> mkCmd txt (toJS x:xs)
-
-cmd :: MkCmd a => Text -> a
-cmd x = mkCmd x []
 
 cmdAppear :: Loc -> Text -> I ()
-cmdAppear = cmd "appear"
+cmdAppear = remote "appear"
 
 cmdDisappear :: Loc -> I ()
-cmdDisappear = cmd "disappear"
+cmdDisappear = remote "disappear"
 
 cmdSwapTiles :: Loc -> Loc -> I ()
-cmdSwapTiles = cmd "swapTiles"
+cmdSwapTiles = remote "swapTiles"
 
 cmdMoveTile :: Loc -> Loc -> I ()
-cmdMoveTile = cmd "moveTile"
+cmdMoveTile = remote "moveTile"
 
 cmdAddDruid :: Text -> Loc -> Text -> Bool -> Bool -> I ()
-cmdAddDruid = cmd "addDruid"
+cmdAddDruid = remote "addDruid"
 
 cmdRemoveDruid :: Text -> I ()
-cmdRemoveDruid = cmd "removeDruid"
+cmdRemoveDruid = remote "removeDruid"
 
 cmdMoveDruid :: Text -> Loc -> I ()
-cmdMoveDruid = cmd "moveDruid"
+cmdMoveDruid = remote "moveDruid"
 
 cmdSetDruidState :: Text -> Bool -> I ()
-cmdSetDruidState = cmd "setDruidState"
+cmdSetDruidState = remote "setDruidState"
 
 cmdChooseTile :: [Loc] -> I Loc
-cmdChooseTile = cmd "chooseTile"
+cmdChooseTile = remote "chooseTile"
 
 cmdChooseDruid :: [Text] -> I Text
-cmdChooseDruid = cmd "chooseDruid"
+cmdChooseDruid = remote "chooseDruid"
 
 cmdChooseNewLocation :: [Text] -> I Text
-cmdChooseNewLocation = cmd "chooseNewLocation"
+cmdChooseNewLocation = remote "chooseNewLocation"
 
 
-
---------------------------------------------------------------------------------
-
-badInput :: ByteString -> Snap a
-badInput msg =
-  Snap.finishWith (Snap.setResponseStatus 400 msg Snap.emptyResponse)
-
-notFound :: Snap a
-notFound = Snap.finishWith (Snap.setResponseStatus 404 "Not Found"
-                                                      Snap.emptyResponse)
 
 --------------------------------------------------------------------------------
 
@@ -158,36 +95,6 @@ requiredParam p =
      case mb of
        Just x  -> return x
        Nothing -> badInput ("Missing parameter: " `BS.append` p)
-
-textParam :: ByteString -> Snap Text
-textParam p = decodeUtf8 `fmap` requiredParam p
-
-intParam :: ByteString -> Snap Int
-intParam p =
-  do txt <- textParam p
-     let (neg,numTxt) = case Text.uncons txt of
-                          Just ('-',t) -> (negate, t)
-                          _            -> (id, txt)
-     case decimal numTxt of
-       Right (a,t) | Text.null t -> return (neg a)
-       _ -> badInput ("Malformed integer parameter: " `BS.append` p)
-
-natParam :: ByteString -> Snap Int
-natParam p =
-  do txt <- textParam p
-     case decimal txt of
-       Right (a,t) | Text.null t -> return a
-       _ -> badInput ("Malformed natural parameter: " `BS.append` p)
-
-boolParam :: ByteString -> Snap Bool
-boolParam p =
-  do bs <- requiredParam p
-     case bs of
-       "true"  -> return True
-       "false" -> return False
-       _       -> badInput ("Malformed boolean parameter: " `BS.append` p)
-
-
 
 sendJSON :: Export a => a -> Snap ()
 sendJSON a =

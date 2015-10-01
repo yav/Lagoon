@@ -1,7 +1,8 @@
 
 function command(m) {
 
-  function again() { setTimeout(function() { command(m) }, 0) }
+  function again()     { setTimeout(function() { command(m) }, 0) }
+  function sendBack(v) { jQuery.post('/step', { result: JSON.stringify(v) }); again() }
 
   jQuery.post('/step', {}, function(cmd) {
 
@@ -16,20 +17,9 @@ function command(m) {
       case 'removeDruid':   m.removeDruid(cmd[1]); again(); break
       case 'moveDriud':     m.moveDriud(cmd[1], cmd[2]); again(); break
       case 'setDruidState': m.setDruidState(cmd[1], cmd[2]); again(); break
-      case 'chooseTile':    m.chooseTile(cmd[1], function(loc) {
-                                jQuery.post('/step', loc)
-                                again()
-                            })
-                            break
-      case 'chooseDruid':   m.chooseDruid(cmd[2], function(d) {
-                              jQuery.post('/step', { next: d })
-                              again()
-                            })
-                            break
-      case 'chooseNewLocation': m.chooseNewLocation(cmd[1], function(loc) {
-                                  jQuery.post('/step', { next: loc })
-                                  again()
-                               })
+      case 'chooseTile':    m.chooseTile(cmd[1], sendBack); break
+      case 'chooseDruid':   m.chooseDruid(cmd[2], sendBack); break
+      case 'chooseNewLocation': m.chooseNewLocation(cmd[1], sendBack); break
     }
 
   })
