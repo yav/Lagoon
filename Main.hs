@@ -80,43 +80,62 @@ instance Export Loc where
   toJS (Loc x y) = object [ "x" .= x, "y" .= y ]
 
 
-noRes :: Cmd -> I ()
-noRes c = Call c (Return ())
+class MkCmd a where
+  mkCmd :: Text -> [Value] -> a
+
+class MkRes a where
+  mkRes :: I a
+
+instance MkRes a => MkCmd (I a) where
+  mkCmd txt xs = Call (Cmd txt (reverse xs)) mkRes
+
+instance MkRes () where
+  mkRes = Return ()
+
+instance MkRes Text where
+  mkRes = GetText Return
+
+instance MkRes Loc where
+  mkRes = GetLoc Return
+
+instance (Export a, MkCmd b) => MkCmd (a -> b) where
+  mkCmd txt xs = \x -> mkCmd txt (toJS x:xs)
+
+cmd :: MkCmd a => Text -> a
+cmd x = mkCmd x []
 
 cmdAppear :: Loc -> Text -> I ()
-cmdAppear l t = noRes $ Cmd "appear" [ toJS l, toJS t ]
+cmdAppear = cmd "appear"
 
 cmdDisappear :: Loc -> I ()
-cmdDisappear l = noRes $ Cmd "disappear" [ toJS l ]
+cmdDisappear = cmd "disappear"
 
 cmdSwapTiles :: Loc -> Loc -> I ()
-cmdSwapTiles l1 l2 = noRes $ Cmd "swapTiles" [ toJS l1, toJS l2 ]
+cmdSwapTiles = cmd "swapTiles"
 
 cmdMoveTile :: Loc -> Loc -> I ()
-cmdMoveTile l1 l2 = noRes $ Cmd "moveTile" [ toJS l1, toJS l2 ]
+cmdMoveTile = cmd "moveTile"
 
-cmdAddDruid :: Text -> Loc -> Text -> Bool -> Bool -> Cmd
-cmdAddDruid x y z a b =
-  Cmd "addDruid" [ toJS x, toJS y, toJS z, toJS a, toJS b ]
+cmdAddDruid :: Text -> Loc -> Text -> Bool -> Bool -> I ()
+cmdAddDruid = cmd "addDruid"
 
 cmdRemoveDruid :: Text -> I ()
-cmdRemoveDruid x = noRes $ Cmd "removeDruid" [ toJS x ]
+cmdRemoveDruid = cmd "removeDruid"
 
 cmdMoveDruid :: Text -> Loc -> I ()
-cmdMoveDruid x y = noRes $ Cmd "moveDruid" [ toJS x, toJS y ]
+cmdMoveDruid = cmd "moveDruid"
 
 cmdSetDruidState :: Text -> Bool -> I ()
-cmdSetDruidState x y = noRes $ Cmd "setDruidState" [ toJS x, toJS y ]
+cmdSetDruidState = cmd "setDruidState"
 
 cmdChooseTile :: [Loc] -> I Loc
-cmdChooseTile xs = Call (Cmd "chooseTile" [toJS xs]) $ GetLoc Return
+cmdChooseTile = cmd "chooseTile"
 
 cmdChooseDruid :: [Text] -> I Text
-cmdChooseDruid xs = Call (Cmd "chooseDruid" [toJS xs]) $ GetText Return
+cmdChooseDruid = cmd "chooseDruid"
 
 cmdChooseNewLocation :: [Text] -> I Text
-cmdChooseNewLocation xs =
-  Call (Cmd "chooseNewLocation" [toJS xs]) $ GetText Return
+cmdChooseNewLocation = cmd "chooseNewLocation"
 
 
 
