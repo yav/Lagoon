@@ -5,7 +5,10 @@ function newArray2d () {
   return {
     each: function(f) {
       jQuery.each(content, function(x,row) {
-        jQuery.each(row, function(y, v) { f(x,y,v) })
+        if (row === undefined) return true
+        jQuery.each(row, function(y, v) {
+          if (v === undefined) return true
+          f(x,y,v) })
       })
     },
 
