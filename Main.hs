@@ -58,6 +58,7 @@ instance Monad I where
   GetText k >>= f = GetText $ \a -> k a >>= f
   GetLoc k >>= f  = GetLoc  $ \a -> k a >>= f
 
+snapStep :: IORef (I ()) -> Snap ()
 snapStep s =
   do w <- liftIO (readIORef s)
      case w of
