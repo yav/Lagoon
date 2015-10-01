@@ -76,6 +76,7 @@ function newMap(viewWidth, viewHeight) {
            .css('clip-path', hex)
            .css('width',  tileWidth + 'px')
            .css('height', tileHeight + 'px')
+           .css('background-size', tileWidth + 'px')
   }
 
   function drawToken(isSmall) {
@@ -100,8 +101,7 @@ function newMap(viewWidth, viewHeight) {
       var t = positionTile(loc, drawHex())
               .css('background-color', "rgba(0,0,0,0)")
               .css('background-image', 'url("img/' + nm + '.png")')
-              .css('background-size', tileWidth + 'px')
-              .css('overflow','auto')
+              .css('overflow','hidden')
               .hide()
 
       var inhabitants = $('<div/>')
@@ -270,6 +270,33 @@ function newMap(viewWidth, viewHeight) {
             return false
          })
       })
+    },
+
+    chooseNewLocation: function(locs,k) {
+      var d = $('<div/>')
+              .css('width',  '100%')
+              .css('height', 1.2 * tileHeight + 'px')
+              .css('position', 'relative')
+              .css('background-color', 'rgba(0,0,0,0.7)')
+              .css('left', '10%')
+              .css('top', '10%')
+              .css('overflow', 'auto')
+
+      jQuery.each(locs,function(ix,nm) {
+        var l = drawHex()
+                .css('background-image', 'url("img/' + nm + '.png")')
+                .css('top', '10%')
+                .css('left', ix * tileWidth + 'px')
+                .css('cursor', 'pointer')
+
+        l.click(function() {
+          d.remove()
+          k(nm)
+        })
+        d.append(l)
+      })
+      container.append(d)
+
     },
 
     getContainer: function() { return container },

@@ -27,12 +27,15 @@ import           Control.Monad.IO.Class(liftIO)
 
 main :: IO ()
 main =
-  do s <- newIORef $ do cmdAppear (Loc 0 0) "1A"
-                        x <- cmdChooseTile [ Loc 0 1, Loc 1 0 ]
-                        cmdAppear x "2B"
+  do let it = do x <- cmdChooseTile [ Loc 0 1, Loc 1 0 ]
+                 y <- cmdChooseNewLocation [ "2A", "2B" ]
+                 cmdAppear x y
+                 it
+     s <- newIORef it
 
      quickHttpServe $ Snap.route
        [ ("step", snapStep s)
+       , ("reset", liftIO (writeIORef s it))
        ] <|> serveDirectory "ui"
 
 data I a  = GetText (Text -> I a)
@@ -111,7 +114,9 @@ cmdChooseTile xs = Call (Cmd "chooseTile" [toJS xs]) $ GetLoc Return
 cmdChooseDruid :: [Text] -> I Text
 cmdChooseDruid xs = Call (Cmd "chooseDruid" [toJS xs]) $ GetText Return
 
-
+cmdChooseNewLocation :: [Text] -> I Text
+cmdChooseNewLocation xs =
+  Call (Cmd "chooseNewLocation" [toJS xs]) $ GetText Return
 
 
 

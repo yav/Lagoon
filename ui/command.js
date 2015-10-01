@@ -26,6 +26,10 @@ function command(m) {
                               again()
                             })
                             break
+      case 'chooseNewLocation': m.chooseNewLocation(cmd[1], function(loc) {
+                                  jQuery.post('/step', { next: loc })
+                                  again()
+                               })
     }
 
   })
