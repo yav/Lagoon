@@ -50,23 +50,26 @@ instance Import Loc where
                                  return (Loc x y)
 
 
-type Board a  = Map Loc a
+newtype Board a = Board (Map Loc a)
+
+emptyBoard :: Board a
+emptyBoard = Board Map.empty
 
 -- | Get the cell at a location, if any.
 getCell :: Loc -> Board a -> Maybe a
-getCell = Map.lookup
+getCell l (Board b) = Map.lookup l b
 
 -- | Set the cell at a location.
 setCell :: Loc -> a -> Board a -> Board a
-setCell = Map.insert
+setCell l a (Board b) = Board (Map.insert l a b)
 
 -- | Remove a cell from the location.
 removeCell :: Loc -> Board a -> Board a
-removeCell l b = Map.delete l b
+removeCell l (Board b) = Board (Map.delete l b)
 
 -- | Which neighbourhoods are connected.
 neighbours :: Board a -> Loc -> [Loc]
-neighbours b l = [ l' | l' <- neighbourhood l, l' `Map.member` b ]
+neighbours (Board b) l = [ l' | l' <- neighbourhood l, l' `Map.member` b ]
 
 neighboursN :: Board a -> Int -> Loc -> [Loc]
 neighboursN b n l
@@ -91,8 +94,11 @@ locked :: Board a -> Loc -> Bool
 locked b l =
   case neighbours b l of
     []    -> True
-    n : _ -> reachable b' [n] /= Map.keysSet b'
+    n : _ -> reachable b' [n] /= boardFilled b'
       where b' = removeCell l b
+
+boardFilled :: Board a -> Set Loc
+boardFilled (Board mp) = Map.keysSet mp
 
 -- | Swap two cells on the board.
 swapCells :: Loc -> Loc -> Board a -> Board a

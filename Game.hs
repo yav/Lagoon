@@ -5,21 +5,48 @@ import Bag
 import Board
 import UI
 
-import           Data.Monoid((<>))
-import           Data.Text (Text)
-import qualified Data.Text as Text
 import qualified Data.Set as Set
 import           Data.Set ( Set )
+
+
+--------------------------------------------------------------------------------
+-- Starting locations
+
+data GameSetup = GameSetup
+  { allLocations      :: [ Place ]
+  , startingLocations :: [ Place ]
+  }
+
+
+{-
+gruusWalkabout :: [ Place ]
+gruusWalkabout = map mk [ 1, 14, 21 ]
+  where mk x = PlaceId { cellNumnber = x, cellSide = A }
+
+floatingInParadise :: [ Place ]
+floatingInParadise = map mk [ 2, 16, 18 ]
+  where mk x = PlaceId { cellNumnber = x, cellSide = B }
+
+riverOfFreedom :: [ Place ]
+riverOfFreedom = map mk [ 5, 15, 19 ]
+  where mk x = PlaceId { cellNumnber = x, cellSide = A }
+-}
+--------------------------------------------------------------------------------
+
+
 
 
 
 data Game = Game
   { players :: Players
-  , board   :: Board PlaceId
+  , board   :: Board Place
   }
 
-occupied :: Game -> [(Text,[Loc])]
-occupied g = [ (playerName p, ls)
+preGame :: Circle -> Game
+preGame p = Game { players = singlePlayer p, board = emptyBoard }
+
+occupied :: Game -> [(Circle,[Loc])]
+occupied g = [ (playerCircle p, ls)
                   | p <- playerList (players g)
                   , let ls = map druidLocation (playerDruids p) ]
 
@@ -31,6 +58,17 @@ data Players = Players
   , playersNext :: [Player]
   }
 
+singlePlayer :: Circle -> Players
+singlePlayer p = Players
+  { playersPrev = []
+  , playersNext = []
+  , playerCur = CurrentPlayer
+      { currentPlayer = newPlayer p
+      , currentPhase  = PhaseBegin
+      }
+  }
+
+
 playerList :: Players -> [Player]
 playerList p = currentPlayer (playerCur p) : playersPrev p ++ playersNext p
 
@@ -41,22 +79,24 @@ data CurrentPlayer = CurrentPlayer
   }
 
 data Phase = PhaseBegin
-           | PhaseRefresh
+           | PhaseRefresh Int
            | PhaseAction
            | PhaseEnd
 
 
+
+
 data Player = Player
-  { playerName        :: Text
+  { playerCircle        :: Circle
   , playerSeeds       :: Bag Energy
-  , playerUnravelled  :: Set PlaceId
+  , playerUnravelled  :: Set Place
   , playerSupply      :: [Druid]
   , playerDruids      :: [ActiveDruid]
   }
 
-newPlayer :: Text -> Player
+newPlayer :: Circle -> Player
 newPlayer pn = Player
-  { playerName       = pn
+  { playerCircle     = pn
   , playerSeeds      = bagEmpty
   , playerUnravelled = Set.empty
   , playerSupply     = zipWith druid [ 0 .. ] (Elder : replicate 4 Acolyte)
@@ -64,42 +104,45 @@ newPlayer pn = Player
   }
   where
   druid n r = Druid { druidRank = r
-                    , druidName = pn <> "_" <> Text.pack (show (n :: Int))
+                    , druidName = DruidName { druidCircle = pn
+                                            , druidNumber = n }
                     }
 
-readyDruids :: Player -> [Text]
+readyDruids :: Player -> [DruidName]
 readyDruids p =
   [ druidName d | ActiveDruid { druidState = Ready
                               , druidId = d } <- playerDruids p ]
 
-exhaustedDruids :: Player -> [Text]
+exhaustedDruids :: Player -> [DruidName]
 exhaustedDruids p =
   [ druidName d | ActiveDruid { druidState = Exhausted
                               , druidId = d } <- playerDruids p ]
 
-inactiveDruids :: Player -> [Text]
+inactiveDruids :: Player -> [DruidName]
 inactiveDruids p = map druidName (playerSupply p)
 
+remove :: (a -> Bool) -> [a] -> Maybe (a, [a])
+remove p xs = case break p xs of
+                (as,b:bs) -> Just (b, as ++ bs)
+                _         -> Nothing
 
-removeActive :: Text -> Player -> Maybe (ActiveDruid, Player)
+removeActive :: DruidName -> Player -> Maybe (ActiveDruid, Player)
 removeActive nm p =
-  case break ((== nm) . druidName . druidId) (playerDruids p) of
-    (as, b : bs) -> Just (b, p { playerDruids = as ++ bs })
-    _            -> Nothing
+  do (d,ds) <- remove ((== nm) . druidName . druidId) (playerDruids p)
+     return (d, p { playerDruids = ds })
 
-removeInactive :: Text -> Player -> Maybe (Druid, Player)
+removeInactive :: DruidName -> Player -> Maybe (Druid, Player)
 removeInactive nm p =
-  case break ((== nm) . druidName) (playerSupply p) of
-    (as, b : bs) -> Just (b, p { playerSupply = as ++ bs })
-    _            -> Nothing
+  do (d,ds) <- remove ((== nm) . druidName) (playerSupply p)
+     return (d, p { playerSupply = ds })
 
 
-exileDruid :: Text -> Player -> Maybe Player
+exileDruid :: DruidName -> Player -> Maybe Player
 exileDruid nm p =
   do (d,p1) <- removeActive nm p
      return p1 { playerSupply = druidId d : playerSupply p1 }
 
-summonDruid :: Text -> Loc -> Player -> Maybe Player
+summonDruid :: DruidName -> Loc -> Player -> Maybe Player
 summonDruid nm loc p =
   do (d,p1) <- removeInactive nm p
      return p1 { playerDruids = ActiveDruid { druidId       = d
@@ -107,15 +150,19 @@ summonDruid nm loc p =
                                             , druidLocation = loc
                                             } : playerDruids p1 }
 
-moveDruid :: Text -> Loc -> Player -> Maybe Player
+moveDruid :: DruidName -> Loc -> Player -> Maybe Player
 moveDruid nm newLoc p =
   do (d,p1) <- removeActive nm p
      let d1 = d { druidLocation = newLoc }
      return p1 { playerDruids = d1 : playerDruids p1 }
 
 
-data Druid        = Druid { druidName :: Text, druidRank :: DruidRank }
-                    deriving (Eq,Ord)
+data Druid        = Druid { druidName :: DruidName, druidRank :: DruidRank }
+
+data DruidName      = DruidName { druidCircle :: Circle
+                            , druidNumber :: !Int
+                            } deriving (Eq,Ord)
+
 
 data DruidRank    = Acolyte | Elder
                     deriving (Eq,Ord)
@@ -133,7 +180,14 @@ data Place = Place { placeEnergy   :: Energy
                    , placeIsHaven  :: Bool
                    , placeGroup    :: Int
                    , placeName     :: String
+                   , placeId       :: PlaceId
                    }
+
+instance Eq Place where
+  x == y = placeId x == placeId y
+
+instance Ord Place where
+  compare x y = compare (placeId x) (placeId y)
 
 data PlaceId    = PlaceId { cellNumnber :: Int, cellSide :: Side }
                   deriving (Eq,Ord)
@@ -165,6 +219,7 @@ data Circle     = Stag | Dragonfly
                 | Hare | Owl
                 | Fern | Turtle
                 | Mushroom | Moon
+                  deriving (Eq,Ord)
 
 pathOf :: Circle -> Path
 pathOf c =
@@ -177,6 +232,7 @@ pathOf c =
     Turtle    -> Presence
     Mushroom  -> Mystery
     Moon      -> Mystery
+
 
 
 --------------------------------------------------------------------------------
