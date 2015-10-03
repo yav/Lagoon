@@ -1,4 +1,7 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Board where
+
+import JSON
 
 import Data.Maybe(fromMaybe)
 import Data.Map (Map)
@@ -28,13 +31,25 @@ delta d =
     NW -> (-1, 1)
 
 neighbourhood :: Loc -> [Loc]
-neighbourhood (x,y) = [ (x + dx, y + dy) | (dx,dy) <- map delta allDirs ]
+neighbourhood (Loc x y) =
+  [ Loc (x + dx) (y + dy) | (dx,dy) <- map delta allDirs ]
 
 
 
 
 --------------------------------------------------------------------------------
-type Loc      = (Int,Int)
+data Loc  = Loc Int Int
+            deriving (Eq,Ord)
+
+instance Export Loc where
+  toJS (Loc x y) = object [ "x" .= x, "y" .= y ]
+
+instance Import Loc where
+  fromJS = withObject $ \o -> do x <- o .: "x"
+                                 y <- o .: "y"
+                                 return (Loc x y)
+
+
 type Board a  = Map Loc a
 
 -- | Get the cell at a location, if any.

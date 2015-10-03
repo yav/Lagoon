@@ -1,10 +1,16 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Game where
 
 import Bag
 import Board
-import Data.Set (Set)
-import qualified Data.Map as Map
-import           Data.Map ( Map )
+import UI
+
+import           Data.Monoid((<>))
+import           Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Data.Set as Set
+import           Data.Set ( Set )
+
 
 
 data Game = Game
@@ -12,7 +18,7 @@ data Game = Game
   , board   :: Board PlaceId
   }
 
-occupied :: Game -> [(PlayerName,[Loc])]
+occupied :: Game -> [(Text,[Loc])]
 occupied g = [ (playerName p, ls)
                   | p <- playerList (players g)
                   , let ls = map druidLocation (playerDruids p) ]
@@ -39,69 +45,88 @@ data Phase = PhaseBegin
            | PhaseAction
            | PhaseEnd
 
-newtype PlayerName = PlayerName String
 
 data Player = Player
-  { playerName        :: PlayerName
+  { playerName        :: Text
   , playerSeeds       :: Bag Energy
   , playerUnravelled  :: Set PlaceId
-  , playerSupply      :: Bag Druid
+  , playerSupply      :: [Druid]
   , playerDruids      :: [ActiveDruid]
   }
 
-readyDruids :: Player -> [Int]
+newPlayer :: Text -> Player
+newPlayer pn = Player
+  { playerName       = pn
+  , playerSeeds      = bagEmpty
+  , playerUnravelled = Set.empty
+  , playerSupply     = zipWith druid [ 0 .. ] (Elder : replicate 4 Acolyte)
+  , playerDruids     = []
+  }
+  where
+  druid n r = Druid { druidRank = r
+                    , druidName = pn <> "_" <> Text.pack (show (n :: Int))
+                    }
+
+readyDruids :: Player -> [Text]
 readyDruids p =
-  [ n | (n, ActiveDruid { druidState = Ready }) <-
-                                              zip [ 0 .. ] (playerDruids p) ]
+  [ druidName d | ActiveDruid { druidState = Ready
+                              , druidId = d } <- playerDruids p ]
 
-exhaustedDruids :: Player -> [Int]
+exhaustedDruids :: Player -> [Text]
 exhaustedDruids p =
-  [ n | (n, ActiveDruid { druidState = Exhausted }) <-
-                                              zip [ 0 .. ] (playerDruids p) ]
+  [ druidName d | ActiveDruid { druidState = Exhausted
+                              , druidId = d } <- playerDruids p ]
+
+inactiveDruids :: Player -> [Text]
+inactiveDruids p = map druidName (playerSupply p)
 
 
-exileDruid :: Int -> Player -> Maybe Player
-exileDruid n p =
-  do (as,b:bs) <- return $ splitAt n (playerDruids p)
-     return p { playerSupply = bagAdd 1 (druidType b) (playerSupply p)
-              , playerDruids = as ++ bs
-              }
+removeActive :: Text -> Player -> Maybe (ActiveDruid, Player)
+removeActive nm p =
+  case break ((== nm) . druidName . druidId) (playerDruids p) of
+    (as, b : bs) -> Just (b, p { playerDruids = as ++ bs })
+    _            -> Nothing
 
-summonDruid :: Druid -> Loc -> Player -> Maybe Player
-summonDruid druid loc p =
-  do newSupply <- bagRemove 1 druid (playerSupply p)
-     return p { playerSupply = newSupply
-              , playerDruids = ActiveDruid { druidType     = druid
-                                           , druidState    = Exhausted
-                                           , druidLocation = loc
-                                           } : playerDruids p }
-
-moveDruid :: Int -> Loc -> Player -> Maybe Player
-moveDruid n newLoc p =
-  do (as,b:bs) <- return (splitAt n (playerDruids p))
-     return p { playerDruids = as ++ b { druidLocation = newLoc } : bs }
+removeInactive :: Text -> Player -> Maybe (Druid, Player)
+removeInactive nm p =
+  case break ((== nm) . druidName) (playerSupply p) of
+    (as, b : bs) -> Just (b, p { playerSupply = as ++ bs })
+    _            -> Nothing
 
 
-data Druid        = Acolyte | Elder
+exileDruid :: Text -> Player -> Maybe Player
+exileDruid nm p =
+  do (d,p1) <- removeActive nm p
+     return p1 { playerSupply = druidId d : playerSupply p1 }
+
+summonDruid :: Text -> Loc -> Player -> Maybe Player
+summonDruid nm loc p =
+  do (d,p1) <- removeInactive nm p
+     return p1 { playerDruids = ActiveDruid { druidId       = d
+                                            , druidState    = Exhausted
+                                            , druidLocation = loc
+                                            } : playerDruids p1 }
+
+moveDruid :: Text -> Loc -> Player -> Maybe Player
+moveDruid nm newLoc p =
+  do (d,p1) <- removeActive nm p
+     let d1 = d { druidLocation = newLoc }
+     return p1 { playerDruids = d1 : playerDruids p1 }
+
+
+data Druid        = Druid { druidName :: Text, druidRank :: DruidRank }
+                    deriving (Eq,Ord)
+
+data DruidRank    = Acolyte | Elder
                     deriving (Eq,Ord)
 
 data DruidState   = Ready | Exhausted
 
 data ActiveDruid  = ActiveDruid
-  { druidType     :: Druid
+  { druidId       :: Druid
   , druidState    :: DruidState
   , druidLocation :: Loc
   }
-
-activeMove :: Loc -> ActiveDruid -> ActiveDruid
-activeMove l a = a { druidLocation = l }
-
-activeExhaust :: ActiveDruid -> ActiveDruid
-activeExhaust a = a { druidState = Exhausted }
-
-activeRefresh :: ActiveDruid -> ActiveDruid
-activeRefresh a = a { druidState = Ready }
-
 
 
 data Place = Place { placeEnergy   :: Energy
