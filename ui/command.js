@@ -17,9 +17,12 @@ function command(m) {
       case 'removeDruid':   m.removeDruid(cmd[1]); again(); break
       case 'moveDriud':     m.moveDriud(cmd[1], cmd[2]); again(); break
       case 'setDruidState': m.setDruidState(cmd[1], cmd[2]); again(); break
+
       case 'chooseTile':    m.chooseTile(cmd[1], sendBack); break
       case 'chooseDruid':   m.chooseDruid(cmd[2], sendBack); break
       case 'chooseNewLocation': m.chooseNewLocation(cmd[1], sendBack); break
+
+      case 'reset': m.chooseNewLocation(); again(); break
     }
 
   })

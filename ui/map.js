@@ -1,17 +1,18 @@
 
 function newMap(viewWidth, viewHeight) {
 
-  var tileWidth   = 250
-  var tileHeight  = tileWidth / 1.16
-  var origX       = 0
-  var origY       = 0
+  var tileWidth
+  var tileHeight
 
-  var tiles       = newArray2d()
-  var druids      = {}
+  var origX
+  var origY
 
-  var choosers = []
-  var scrollStartX = null
-  var scrollStartX = null
+  var tiles
+  var druids
+
+  var choosers
+  var scrollStartX
+  var scrollStartX
 
   var container = $('<div/>')
                   .css('position', 'relative')
@@ -20,6 +21,10 @@ function newMap(viewWidth, viewHeight) {
                   .css('background-color', 'black')
                   .css('overflow', 'hidden')
                   .css('user-select', 'none')
+
+
+  reset()
+
   container
   .mousedown(function(ev) { scrollStartX = ev.pageX
                             scrollStartY = ev.pageY
@@ -38,6 +43,23 @@ function newMap(viewWidth, viewHeight) {
     scrollStartX = null
     scrollStartY = null
     container.css('cursor','auto') })
+
+  function reset() {
+    tileWidth   = 250
+    tileHeight  = tileWidth / 1.16
+
+    origX       = 0
+    origY       = 0
+
+    tiles       = newArray2d()
+    druids      = {}
+
+    choosers     = []
+    scrollStartX = null
+    scrollStartX = null
+
+    container.empty()
+  }
 
   function scroll(dx,dy) {
     origX = origX + dx
@@ -298,6 +320,8 @@ function newMap(viewWidth, viewHeight) {
       container.append(d)
 
     },
+
+    reset: reset,
 
     getContainer: function() { return container },
   }
