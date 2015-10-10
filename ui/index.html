@@ -20,15 +20,14 @@ $(document).ready(function() {
   m = newMap(800,600)
   b.append(m.getContainer())
 
-/*
   m.chooseNewLocation(['2A','2B','13A','13B'], function(x) {
     console.log(x)
-  }) */
+  })
 
+/*
   jQuery.post('/reset')
   command(m)
 
-  /*
   m.appear({x:0,y:0},'1A')
   m.appear({x:1,y:0},'2A')
   m.addDruid('x1', {x:0, y:0}, 'hare', true, true)

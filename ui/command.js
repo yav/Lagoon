@@ -2,7 +2,8 @@
 function command(m) {
 
   function again()     { setTimeout(function() { command(m) }, 0) }
-  function sendBack(v) { jQuery.post('/step', { result: JSON.stringify(v) }); again() }
+  function sendBack(v) { jQuery.post('/step', { result: JSON.stringify(v) })
+                         again() }
 
   jQuery.post('/step', {}, function(cmd) {
 
