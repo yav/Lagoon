@@ -9,6 +9,7 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.List(nub)
+import Data.Foldable(traverse_)
 
 
 data Dir = N | NE | SE | S | SW | NW
@@ -51,6 +52,7 @@ instance Import Loc where
 
 
 newtype Board a = Board (Map Loc a)
+
 
 emptyBoard :: Board a
 emptyBoard = Board Map.empty
@@ -108,5 +110,7 @@ swapCells l1 l2 b =
      c2 <- getCell l2 b
      return (setCell l1 c2 (setCell l2 c1 b))
 
+forEach_ :: Applicative m => Board a -> (Loc -> a -> m ()) -> m ()
+forEach_ (Board m) f = traverse_ (uncurry f) (Map.toList m)
 
 
