@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module UI where
+module UI (module UI, I) where
 
 import JSON(remote,I)
 import Board(Loc)
@@ -37,6 +37,9 @@ cmdChooseDruid = remote "chooseDruid"
 
 cmdChooseNewLocation :: [Text] -> I Text
 cmdChooseNewLocation = remote "chooseNewLocation"
+
+cmdReset :: I ()
+cmdReset = remote "reset"
 
 
 
