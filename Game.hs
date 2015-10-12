@@ -1,12 +1,19 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, RecordWildCards #-}
 module Game where
 
 import Bag
 import Board
 import UI
+import Perhaps
+import JSON
 
+import           Data.Foldable(for_)
+import           Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Set as Set
 import           Data.Set ( Set )
+import           Data.List(nub)
+import           Control.Monad(liftM,ap)
 
 
 --------------------------------------------------------------------------------
@@ -33,8 +40,50 @@ riverOfFreedom = map mk [ 5, 15, 19 ]
 -}
 --------------------------------------------------------------------------------
 
+newtype GameM a = GameM (Game -> I (a, Game))
+
+instance Functor GameM where
+  fmap = liftM
+
+instance Applicative GameM where
+  pure a = GameM (\g -> return (a, g))
+  (<*>)  = ap
+
+instance Monad GameM where
+  GameM m >>= k = GameM (\g -> do (a,g1) <- m g
+                                  let GameM m1 = k a
+                                  m1 g1)
+
+runGameM :: [Circle] -> GameM a -> I a
+runGameM ps (GameM m) =
+  case blankGame ps of
+    Failed err -> fail (Text.unpack err)
+    Ok g       -> fmap fst (m g)
+
+ict :: I a -> GameM a
+ict m = GameM (\g -> do x <- m
+                        return (x,g))
+
+withGame :: (Game -> (a,Game)) -> GameM a
+withGame f = GameM (return . f)
+
+withGame_ :: (Game -> Game) -> GameM ()
+withGame_ f = GameM (\g -> return ((), f g))
 
 
+
+addTile :: Loc -> Place -> GameM ()
+addTile l p =
+  do ict $ cmdAppear l (placeIdText p)
+     withGame_ $ \Game { .. } -> Game { board = setCell l p board, .. }
+
+{-
+addDruid :: Loc -> DruidName -> GameM ()
+addDruid l d =
+  do withGame $ \Game { .. } ->
+      let CurrentPlayer { .. } = playerCur
+      in case summonDruid d l currentPlayer of
+-}
 
 
 data Game = Game
@@ -42,13 +91,42 @@ data Game = Game
   , board   :: Board Place
   }
 
+
+{-
+addDruid :: :: Game -> I ()
+sendInitial Game { .. } =
+  do cmdReset
+     forEach_ board $ \l p -> cmdAppear l (placeIdText p)
+     for_ (playerList players) $ \p ->
+      for_ (playerDruids p) $ \d ->
+        do let ActiveDruid { druidId = Druid { druidName = DruidName { .. }
+                                             , ..}
+                           , .. } = d
+           cmdAddDruid
+             (druidTextId d)
+             druidLocation
+             (Text.pack (show druidCircle))
+             (druidRank == Acolyte)
+             (druidState == Ready)
+
+
 preGame :: Circle -> Game
 preGame p = Game { players = singlePlayer p, board = emptyBoard }
-
+-}
 occupied :: Game -> [(Circle,[Loc])]
 occupied g = [ (playerCircle p, ls)
                   | p <- playerList (players g)
                   , let ls = map druidLocation (playerDruids p) ]
+
+
+
+blankGame :: [Circle] -> Perhaps Game
+blankGame [] = Failed "Cannot start a game with no players"
+blankGame ps | nub ps /= ps = Failed "Duplicate players"
+blankGame (p : ps) = Ok (foldr add g0 ps)
+  where
+  g0 = Game { players = singlePlayer p, board = emptyBoard }
+  add c Game { .. } = Game { players = addPlayer c players, .. }
 
 
 
@@ -68,6 +146,9 @@ singlePlayer p = Players
       }
   }
 
+addPlayer :: Circle -> Players -> Players
+addPlayer c Players { .. } = Players { playersNext = newPlayer c : playersNext
+                                     , .. }
 
 playerList :: Players -> [Player]
 playerList p = currentPlayer (playerCur p) : playersPrev p ++ playersNext p
@@ -160,14 +241,19 @@ moveDruid nm newLoc p =
 data Druid        = Druid { druidName :: DruidName, druidRank :: DruidRank }
 
 data DruidName      = DruidName { druidCircle :: Circle
-                            , druidNumber :: !Int
-                            } deriving (Eq,Ord)
+                                , druidNumber :: !Int
+                                } deriving (Eq,Ord)
+
+instance Export DruidName where
+  toJS DruidName { .. } =
+    toJS (Text.pack (show druidCircle ++ show druidNumber))
 
 
 data DruidRank    = Acolyte | Elder
                     deriving (Eq,Ord)
 
 data DruidState   = Ready | Exhausted
+                    deriving Eq
 
 data ActiveDruid  = ActiveDruid
   { druidId       :: Druid
@@ -175,11 +261,10 @@ data ActiveDruid  = ActiveDruid
   , druidLocation :: Loc
   }
 
-
 data Place = Place { placeEnergy   :: Energy
                    , placeIsHaven  :: Bool
                    , placeGroup    :: Int
-                   , placeName     :: String
+                   , placeName     :: Text
                    , placeId       :: PlaceId
                    }
 
@@ -191,6 +276,14 @@ instance Ord Place where
 
 data PlaceId    = PlaceId { cellNumnber :: Int, cellSide :: Side }
                   deriving (Eq,Ord)
+
+placeIdText :: Place -> Text
+placeIdText Place { placeId = PlaceId { .. } } =
+  Text.pack (show cellNumnber ++ side)
+  where side = case cellSide of
+                 A -> "A"
+                 B -> "B"
+
 
 data Side       = A | B
                   deriving (Eq,Ord)
@@ -219,7 +312,7 @@ data Circle     = Stag | Dragonfly
                 | Hare | Owl
                 | Fern | Turtle
                 | Mushroom | Moon
-                  deriving (Eq,Ord)
+                  deriving (Eq,Ord,Show)
 
 pathOf :: Circle -> Path
 pathOf c =
@@ -232,6 +325,63 @@ pathOf c =
     Turtle    -> Presence
     Mushroom  -> Mystery
     Moon      -> Mystery
+
+
+--------------------------------------------------------------------------------
+
+places :: [ Place ]
+places =
+  [ 
+    -- 1
+    Place { placeEnergy   = Yellow
+          , placeIsHaven  = True
+          , placeGroup    = 1
+          , placeName     = "Gruu's Refuge"
+          , placeId       = pid 1 A
+          }
+
+  , Place { placeEnergy   = Red
+          , placeIsHaven  = True
+          , placeGroup    = 1
+          , placeName     = "Cloudtop Monastery"
+          , placeId       = pid 1 B
+          }
+
+
+    -- 14
+  , Place { placeEnergy   = Red
+          , placeIsHaven  = False
+          , placeGroup    = 2
+          , placeName     = "Eye of the Forest"
+          , placeId       = pid 14 A
+          }
+
+  , Place { placeEnergy   = Blue
+          , placeIsHaven  = False
+          , placeGroup    = 2
+          , placeName     = "Moon Garden"
+          , placeId       = pid 14 B
+          }
+
+
+    -- 21
+  , Place { placeEnergy   = Blue
+          , placeIsHaven  = False
+          , placeGroup    = 3
+          , placeName     = "Terrapin Ancient"
+          , placeId       = pid 21 A
+          }
+
+  , Place { placeEnergy   = Yellow
+          , placeIsHaven  = False
+          , placeGroup    = 3
+          , placeName     = "Kindred Stone"
+          , placeId       = pid 21 B
+          }
+  ]
+
+  where
+  pid cellNumnber cellSide = PlaceId { .. }
 
 
 

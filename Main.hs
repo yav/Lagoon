@@ -19,23 +19,23 @@ import           Control.Monad.IO.Class(liftIO)
 
 main :: IO ()
 main =
-  do let it = do x <- cmdChooseTile [ Loc 0 1, Loc 1 0 ]
-                 y <- cmdChooseNewLocation [ "2A", "2B" ]
-                 cmdAppear x y
-                 it
-     s <- newIORef it
+  do s <- newIORef newGame
 
      quickHttpServe $ Snap.route
        [ ("step", snapStep s)
-       , ("reset", liftIO (writeIORef s it))
+       , ("reset", liftIO (writeIORef s newGame))
        ] <|> serveDirectory "ui"
 
 
 snapStep :: IORef (I ()) -> Snap ()
 snapStep s =
-  do w  <- liftIO (readIORef s)
-     w1 <- snapStepI w
-     liftIO (writeIORef s w1)
+  do m  <- liftIO (readIORef s)
+     m1 <- snapStepI m
+     liftIO (writeIORef s m1)
 
+newGame :: I ()
+newGame = runGameM [Stag] g
+  where
+  g = addTile (Loc 0 0) (places !! 0)
 
 

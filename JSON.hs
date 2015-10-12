@@ -56,7 +56,7 @@ import           Snap.Core (Snap)
 import qualified Snap.Core as Snap
 import qualified Data.Text as Text
 import           Data.Text.Read(decimal)
-import           Data.Text.Encoding(decodeUtf8)
+import           Data.Text.Encoding(decodeUtf8,encodeUtf8)
 import qualified Data.HashMap.Strict as HashMap
 import           Data.Scientific(toBoundedInteger)
 
@@ -167,6 +167,7 @@ instance Import a => Import [a] where
 
 data I a  = forall b. Import b => Receive (b -> I a)
           | Send JS.Value (I a)
+          | Error Text
           | Return a
 
 
@@ -178,6 +179,8 @@ instance Applicative I where
   pure  = Return
 
 instance Monad I where
+  fail x          = Error (Text.pack x)
+
   Return a  >>= k = k a
   Send x k  >>= f = Send x (k >>= f)
   Receive k >>= f = Receive (\a -> k a >>= f)
@@ -229,6 +232,8 @@ snapStepI w =
 
     Send c k   -> do sendJSON c
                      return k
+
+    Error e    -> badInput (encodeUtf8 e)
 
     Return a   -> return (Return a)
 
