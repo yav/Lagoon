@@ -10,11 +10,13 @@ import Data.Map ( Map )
 
 data Game = Game
   { players :: Map Circle Player
-  , board   :: Board Place
+  , board   :: Board ActivePlace
+  -- XXX: Player order, current player
   }
 
 data Player = Player
-  { playerSeeds       :: Bag Energy
+  { playerCircle      :: Circle
+  , playerSeeds       :: Bag Energy
   , playerUnravelled  :: Set Place
   , playerSupply      :: Set Druid
   }
@@ -25,11 +27,11 @@ data Player = Player
 -- Tiles
 
 -- | A place in the bag
-data Place        = Place { placeEnergy   :: Energy
-                          , placeIsHaven  :: Bool
-                          , placeGroup    :: Int
-                          , placeName     :: Text
-                          , placeId       :: PlaceId
+data Place        = Place { letPlaceEnergy  :: Energy
+                          , letPlaceIsHaven :: Bool
+                          , letPlaceGroup   :: Int
+                          , letPlaceName    :: Text
+                          , letPlaceId      :: PlaceId
                           }
 
 instance Eq Place where
@@ -51,9 +53,30 @@ data Energy       = Yellow | Red | Blue
 data LocType      = Allay | Haven | Sanctum | Shrine | Trove
 
 
-data ActivePlace  = ActivePlace { placeStatic :: PlaceId
+data ActivePlace  = ActivePlace { placeStatic :: Place
                                 , placeDruids :: [ActiveDruid]
                                 }
+
+class    IsPlace t           where place :: t -> Place
+instance IsPlace Place       where place = id
+instance IsPlace ActivePlace where place = placeStatic
+
+placeEnergy  :: IsPlace t => t -> Energy
+placeEnergy = letPlaceEnergy . place
+
+placeIsHaven :: IsPlace t => t -> Bool
+placeIsHaven = letPlaceIsHaven . place
+
+placeGroup :: IsPlace t => t -> Int
+placeGroup = letPlaceGroup . place
+
+placeName :: IsPlace t => t -> Text
+placeName = letPlaceName . place
+
+placeId :: IsPlace t => t -> PlaceId
+placeId = letPlaceId . place
+
+
 
 
 --------------------------------------------------------------------------------
@@ -61,8 +84,8 @@ data ActivePlace  = ActivePlace { placeStatic :: PlaceId
 
 
 -- | A token in a player's supply
-data Druid        = Druid { druidName :: DruidName
-                          , druidRank :: DruidRank
+data Druid        = Druid { letDruidName :: DruidName
+                          , letDruidRank :: DruidRank
                           }
 
 instance Eq Druid where
@@ -93,12 +116,20 @@ data Circle       = Stag | Dragonfly
 -- | A token on the board
 data ActiveDruid  = ActiveDruid { druidStatic   :: Druid
                                 , druidState    :: DruidState
-                                , druidLocation :: Loc
                                 }
 
 data DruidState   = Ready | Exhausted
                     deriving Eq
 
+class    IsDruid t           where druid :: t -> Druid
+instance IsDruid ActiveDruid where druid = druidStatic
+instance IsDruid Druid       where druid = id
+
+druidName :: IsDruid t => t -> DruidName
+druidName = letDruidName . druid
+
+druidRank :: IsDruid t => t -> DruidRank
+druidRank = letDruidRank . druid
 
 
 

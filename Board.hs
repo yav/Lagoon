@@ -1,8 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Board where
 
-import JSON
-
 import Data.Maybe(fromMaybe)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -42,15 +40,6 @@ neighbourhood (Loc x y) =
 data Loc  = Loc Int Int
             deriving (Eq,Ord)
 
-instance Export Loc where
-  toJS (Loc x y) = object [ "x" .= x, "y" .= y ]
-
-instance Import Loc where
-  fromJS = withObject $ \o -> do x <- o .: "x"
-                                 y <- o .: "y"
-                                 return (Loc x y)
-
-
 newtype Board a = Board (Map Loc a)
 
 
@@ -73,6 +62,7 @@ removeCell l (Board b) = Board (Map.delete l b)
 neighbours :: Board a -> Loc -> [Loc]
 neighbours (Board b) l = [ l' | l' <- neighbourhood l, l' `Map.member` b ]
 
+-- | Neighbours within a given radius.
 neighboursN :: Board a -> Int -> Loc -> [Loc]
 neighboursN b n l
   | n > 1     = let ls = neighbours b l
@@ -112,5 +102,12 @@ swapCells l1 l2 b =
 
 forEach_ :: Applicative m => Board a -> (Loc -> a -> m ()) -> m ()
 forEach_ (Board m) f = traverse_ (uncurry f) (Map.toList m)
+
+findLoc :: Board a -> (a -> Bool) -> Maybe (Loc,a)
+findLoc (Board b) p = search (Map.toList b)
+  where
+  search xs = case xs of
+                []         -> Nothing
+                (l,a) : as -> if p a then Just (l,a) else search as
 
 

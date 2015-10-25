@@ -1,318 +1,134 @@
-{-# LANGUAGE OverloadedStrings, RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings, FlexibleInstances #-}
 module Game where
 
-import Bag
+import Types
 import Board
-import UI
-import Perhaps
-import JSON
+import Bag
 
-import           Data.Foldable(for_)
-import           Data.Text (Text)
-import qualified Data.Text as Text
 import qualified Data.Set as Set
-import           Data.Set ( Set )
-import           Data.List(nub)
-import           Control.Monad(liftM,ap)
+import qualified Data.Map as Map
+import Control.Monad(guard)
 
 
 --------------------------------------------------------------------------------
--- Starting locations
-
-data GameSetup = GameSetup
-  { allLocations      :: [ Place ]
-  , startingLocations :: [ Place ]
-  }
+-- Game
 
 
-{-
-gruusWalkabout :: [ Place ]
-gruusWalkabout = map mk [ 1, 14, 21 ]
-  where mk x = PlaceId { cellNumnber = x, cellSide = A }
+-- | Game with a blank map and no players.
+blankGame :: Game
+blankGame = Game { players = Map.empty, board = emptyBoard }
 
-floatingInParadise :: [ Place ]
-floatingInParadise = map mk [ 2, 16, 18 ]
-  where mk x = PlaceId { cellNumnber = x, cellSide = B }
+-- | Add a player to a game.
+addPlayer :: Circle -> Player -> Game -> Game
+addPlayer c p g = g { players = Map.insert c p (players g) }
 
-riverOfFreedom :: [ Place ]
-riverOfFreedom = map mk [ 5, 15, 19 ]
-  where mk x = PlaceId { cellNumnber = x, cellSide = A }
--}
+-- | Find an active druid.
+findDruid :: DruidName -> Game -> Maybe (Loc,ActivePlace)
+findDruid nm g = findLoc (board g) thisOne
+  where thisOne = any ((nm == ) . druidName) . placeDruids
+
+-- | Add a druid at the given location.  Fails if there is no such location.
+addDruidAt :: ActiveDruid -> Loc -> Game -> Maybe Game
+addDruidAt d l g =
+  do let b = board g
+     p <- getCell l b
+     return g { board = setCell l (addDruid d p) b }
+
+-- | Remove a druid, returng it, and where it used to be.
+removeDruid :: DruidName -> Game -> Maybe (Loc, ActiveDruid, Game)
+removeDruid nm g =
+    do (loc,p) <- findDruid nm g
+       (d,p1)  <- removeDruid' nm p
+       return (loc, d, g { board = setCell loc p1 (board g) })
+
+-- | Move a druid from one location to another.  Fails if the druid
+-- did not exits, or the new location does not exist.
+moveDruid :: DruidName -> Loc -> Game -> Maybe Game
+moveDruid nm to g =
+  do (_,d,g1) <- removeDruid nm g
+     addDruidAt d to g1
+
+-- | Set the state of an active druid.  Fails if there is no such druid.
+setDruidState :: DruidState -> DruidName -> Game -> Maybe Game
+setDruidState s nm g =
+  do (l,d,g1) <- removeDruid nm g
+     let b = board g1
+     p <- getCell l b
+     let d1 = d { druidState = s }
+     return g1 { board = setCell l (addDruid d1 p) b }
+
+-- | Summon an exhausted druid for the given player at the given location.
+-- The location must exist, and should be a haven.
+summon :: Circle -> DruidName -> Loc -> Game -> Maybe Game
+summon c nm loc g =
+  do p      <- Map.lookup c (players g)
+     (d,p1) <- prepareToSummon nm p
+     ap     <- getCell loc (board g)
+     guard (placeIsHaven ap)
+     let d1  = ActiveDruid { druidState = Exhausted, druidStatic = d }
+         ap1 = addDruid d1 ap
+     return g { players = Map.insert c p1 (players g)
+              , board   = setCell loc ap1 (board g)
+              }
+
+
 --------------------------------------------------------------------------------
+-- Player
 
-newtype GameM a = GameM (Game -> I (a, Game))
-
-instance Functor GameM where
-  fmap = liftM
-
-instance Applicative GameM where
-  pure a = GameM (\g -> return (a, g))
-  (<*>)  = ap
-
-instance Monad GameM where
-  GameM m >>= k = GameM (\g -> do (a,g1) <- m g
-                                  let GameM m1 = k a
-                                  m1 g1)
-
-runGameM :: [Circle] -> GameM a -> I a
-runGameM ps (GameM m) =
-  case blankGame ps of
-    Failed err -> fail (Text.unpack err)
-    Ok g       -> fmap fst (m g)
-
-ict :: I a -> GameM a
-ict m = GameM (\g -> do x <- m
-                        return (x,g))
-
-withGame :: (Game -> (a,Game)) -> GameM a
-withGame f = GameM (return . f)
-
-withGame_ :: (Game -> Game) -> GameM ()
-withGame_ f = GameM (\g -> return ((), f g))
-
-
-
-addTile :: Loc -> Place -> GameM ()
-addTile l p =
-  do ict $ cmdAppear l (placeIdText p)
-     withGame_ $ \Game { .. } -> Game { board = setCell l p board, .. }
-
-{-
-addDruid :: Loc -> DruidName -> GameM ()
-addDruid l d =
-  do withGame $ \Game { .. } ->
-      let CurrentPlayer { .. } = playerCur
-      in case summonDruid d l currentPlayer of
--}
-
-
-data Game = Game
-  { players :: Players
-  , board   :: Board Place
-  }
-
-
-{-
-addDruid :: :: Game -> I ()
-sendInitial Game { .. } =
-  do cmdReset
-     forEach_ board $ \l p -> cmdAppear l (placeIdText p)
-     for_ (playerList players) $ \p ->
-      for_ (playerDruids p) $ \d ->
-        do let ActiveDruid { druidId = Druid { druidName = DruidName { .. }
-                                             , ..}
-                           , .. } = d
-           cmdAddDruid
-             (druidTextId d)
-             druidLocation
-             (Text.pack (show druidCircle))
-             (druidRank == Acolyte)
-             (druidState == Ready)
-
-
-preGame :: Circle -> Game
-preGame p = Game { players = singlePlayer p, board = emptyBoard }
--}
-occupied :: Game -> [(Circle,[Loc])]
-occupied g = [ (playerCircle p, ls)
-                  | p <- playerList (players g)
-                  , let ls = map druidLocation (playerDruids p) ]
-
-
-
-blankGame :: [Circle] -> Perhaps Game
-blankGame [] = Failed "Cannot start a game with no players"
-blankGame ps | nub ps /= ps = Failed "Duplicate players"
-blankGame (p : ps) = Ok (foldr add g0 ps)
-  where
-  g0 = Game { players = singlePlayer p, board = emptyBoard }
-  add c Game { .. } = Game { players = addPlayer c players, .. }
-
-
-
-data Players = Players
-  { playersPrev :: [Player]
-  , playerCur   :: CurrentPlayer
-  , playersNext :: [Player]
-  }
-
-singlePlayer :: Circle -> Players
-singlePlayer p = Players
-  { playersPrev = []
-  , playersNext = []
-  , playerCur = CurrentPlayer
-      { currentPlayer = newPlayer p
-      , currentPhase  = PhaseBegin
-      }
-  }
-
-addPlayer :: Circle -> Players -> Players
-addPlayer c Players { .. } = Players { playersNext = newPlayer c : playersNext
-                                     , .. }
-
-playerList :: Players -> [Player]
-playerList p = currentPlayer (playerCur p) : playersPrev p ++ playersNext p
-
-
-data CurrentPlayer = CurrentPlayer
-  { currentPlayer :: Player
-  , currentPhase  :: Phase
-  }
-
-data Phase = PhaseBegin
-           | PhaseRefresh Int
-           | PhaseAction
-           | PhaseEnd
-
-
-
-
-data Player = Player
-  { playerCircle        :: Circle
-  , playerSeeds       :: Bag Energy
-  , playerUnravelled  :: Set Place
-  , playerSupply      :: [Druid]
-  , playerDruids      :: [ActiveDruid]
-  }
-
+-- | A new player, with no points and all druids in the supply.
 newPlayer :: Circle -> Player
-newPlayer pn = Player
-  { playerCircle     = pn
+newPlayer c = Player
+  { playerCircle     = c
   , playerSeeds      = bagEmpty
   , playerUnravelled = Set.empty
-  , playerSupply     = zipWith druid [ 0 .. ] (Elder : replicate 4 Acolyte)
-  , playerDruids     = []
+  , playerSupply     = Set.fromList
+                         (zipWith new [ 0 .. ] (Elder : replicate 4 Acolyte))
   }
   where
-  druid n r = Druid { druidRank = r
-                    , druidName = DruidName { druidCircle = pn
-                                            , druidNumber = n }
-                    }
-
-readyDruids :: Player -> [DruidName]
-readyDruids p =
-  [ druidName d | ActiveDruid { druidState = Ready
-                              , druidId = d } <- playerDruids p ]
-
-exhaustedDruids :: Player -> [DruidName]
-exhaustedDruids p =
-  [ druidName d | ActiveDruid { druidState = Exhausted
-                              , druidId = d } <- playerDruids p ]
-
-inactiveDruids :: Player -> [DruidName]
-inactiveDruids p = map druidName (playerSupply p)
-
-remove :: (a -> Bool) -> [a] -> Maybe (a, [a])
-remove p xs = case break p xs of
-                (as,b:bs) -> Just (b, as ++ bs)
-                _         -> Nothing
-
-removeActive :: DruidName -> Player -> Maybe (ActiveDruid, Player)
-removeActive nm p =
-  do (d,ds) <- remove ((== nm) . druidName . druidId) (playerDruids p)
-     return (d, p { playerDruids = ds })
-
-removeInactive :: DruidName -> Player -> Maybe (Druid, Player)
-removeInactive nm p =
-  do (d,ds) <- remove ((== nm) . druidName) (playerSupply p)
-     return (d, p { playerSupply = ds })
+  new n r = Druid { letDruidRank = r
+                  , letDruidName = DruidName { druidCircle = c
+                                             , druidNumber = n }
+                  }
 
 
-exileDruid :: DruidName -> Player -> Maybe Player
-exileDruid nm p =
-  do (d,p1) <- removeActive nm p
-     return p1 { playerSupply = druidId d : playerSupply p1 }
+-- | Modify the seeds by the given amount.  Fails if we would decrease the
+-- seeds to a negative quantity.
+updateSeeds :: Int -> Energy -> Player -> Maybe Player
+updateSeeds n e p =
+  case compare n 0 of
+    LT -> do s <- bagRemove (negate n) e (playerSeeds p)
+             return p { playerSeeds = s }
+    EQ -> Just p
+    GT -> Just p { playerSeeds = bagAdd n e (playerSeeds p) }
 
-summonDruid :: DruidName -> Loc -> Player -> Maybe Player
-summonDruid nm loc p =
-  do (d,p1) <- removeInactive nm p
-     return p1 { playerDruids = ActiveDruid { druidId       = d
-                                            , druidState    = Exhausted
-                                            , druidLocation = loc
-                                            } : playerDruids p1 }
+prepareToSummon :: DruidName -> Player -> Maybe (Druid, Player)
+prepareToSummon nm p =
+  case Set.partition ((nm ==) . druidName) (playerSupply p) of
+    (as,bs) -> do (a,_) <- Set.minView as
+                  return (a, p { playerSupply = bs })
 
-moveDruid :: DruidName -> Loc -> Player -> Maybe Player
-moveDruid nm newLoc p =
-  do (d,p1) <- removeActive nm p
-     let d1 = d { druidLocation = newLoc }
-     return p1 { playerDruids = d1 : playerDruids p1 }
+--------------------------------------------------------------------------------
+-- Active Place
 
+addDruid :: ActiveDruid -> ActivePlace -> ActivePlace
+addDruid d a = a { placeDruids = d : placeDruids a }
 
-data Druid        = Druid { druidName :: DruidName, druidRank :: DruidRank }
-
-data DruidName      = DruidName { druidCircle :: Circle
-                                , druidNumber :: !Int
-                                } deriving (Eq,Ord)
-
-instance Export DruidName where
-  toJS DruidName { .. } =
-    toJS (Text.pack (show druidCircle ++ show druidNumber))
-
-
-data DruidRank    = Acolyte | Elder
-                    deriving (Eq,Ord)
-
-data DruidState   = Ready | Exhausted
-                    deriving Eq
-
-data ActiveDruid  = ActiveDruid
-  { druidId       :: Druid
-  , druidState    :: DruidState
-  , druidLocation :: Loc
-  }
-
-data Place = Place { placeEnergy   :: Energy
-                   , placeIsHaven  :: Bool
-                   , placeGroup    :: Int
-                   , placeName     :: Text
-                   , placeId       :: PlaceId
-                   }
-
-instance Eq Place where
-  x == y = placeId x == placeId y
-
-instance Ord Place where
-  compare x y = compare (placeId x) (placeId y)
-
-data PlaceId    = PlaceId { cellNumnber :: Int, cellSide :: Side }
-                  deriving (Eq,Ord)
-
-placeIdText :: Place -> Text
-placeIdText Place { placeId = PlaceId { .. } } =
-  Text.pack (show cellNumnber ++ side)
-  where side = case cellSide of
-                 A -> "A"
-                 B -> "B"
+removeDruid' :: DruidName -> ActivePlace -> Maybe (ActiveDruid, ActivePlace)
+removeDruid' nm a =
+    do (d,xs) <- rm (placeDruids a)
+       return (d, a { placeDruids = xs })
+  where
+  rm xs = case xs of
+            []     -> Nothing
+            b : bs -> if druidName b == nm
+                        then Just (b, bs)
+                        else do (c,cs) <- rm bs
+                                return (c, b : cs)
 
 
-data Side       = A | B
-                  deriving (Eq,Ord)
-
-data Energy     = Yellow | Red | Blue
-                  deriving (Eq,Ord)
-
-data LocType    = Allay | Haven | Sanctum | Shrine | Trove
-
-data ActionType = Invokation
-                | EldridInvokation
-                | Event Event
-                | Exploration
-
-data Event      = WhenAnyoneUnravels
-                | WhenIUravel
-                | WhenIBegin
-                | OnMyTurnOnce
-                | WhenIEnd
-                | WhenSuplyEmpty
-                | OnMyActionOnce
 
 
-data Path       = Adventure | Renewal | Presence | Mystery
-data Circle     = Stag | Dragonfly
-                | Hare | Owl
-                | Fern | Turtle
-                | Mushroom | Moon
-                  deriving (Eq,Ord,Show)
+
 
 pathOf :: Circle -> Path
 pathOf c =
@@ -326,6 +142,8 @@ pathOf c =
     Mushroom  -> Mystery
     Moon      -> Mystery
 
+
+{-
 
 --------------------------------------------------------------------------------
 
@@ -388,6 +206,6 @@ places =
 --------------------------------------------------------------------------------
 -- AJ
 
-
+-}
 
 
