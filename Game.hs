@@ -34,7 +34,7 @@ addDruidAt d l g =
      p <- getCell l b
      return g { board = setCell l (addDruid d p) b }
 
--- | Remove a druid, returng it, and where it used to be.
+-- | Remove a druid. Returns the driud and its location.
 removeDruid :: DruidName -> Game -> Maybe (Loc, ActiveDruid, Game)
 removeDruid nm g =
     do (loc,p) <- findDruid nm g
@@ -59,9 +59,10 @@ setDruidState s nm g =
 
 -- | Summon an exhausted druid for the given player at the given location.
 -- The location must exist, and should be a haven.
-summon :: Circle -> DruidName -> Loc -> Game -> Maybe Game
-summon c nm loc g =
-  do p      <- Map.lookup c (players g)
+summon :: DruidName -> Loc -> Game -> Maybe Game
+summon nm loc g =
+  do let c = druidCircle nm
+     p      <- Map.lookup c (players g)
      (d,p1) <- prepareToSummon nm p
      ap     <- getCell loc (board g)
      guard (placeIsHaven ap)
@@ -71,6 +72,18 @@ summon c nm loc g =
               , board   = setCell loc ap1 (board g)
               }
 
+-- | Move the given location to the player's score area.
+-- Assumes that the cost of the unravalling has been paid, and
+-- all but the unravalling druid have been moved out of the location.
+-- The unravelling druid is returned to the player's supply.
+unravel :: Loc -> Game -> Maybe Game
+unravel l g =
+  do c <- getCell l (board g)
+     case placeDruids c of
+       [d] -> do let pn  = druidCircle (druidName d)
+                     upd = addUnravelled c . returnDruid d
+                 return g { players = Map.adjust upd pn (players g) }
+       _   -> Nothing
 
 --------------------------------------------------------------------------------
 -- Player
@@ -101,11 +114,23 @@ updateSeeds n e p =
     EQ -> Just p
     GT -> Just p { playerSeeds = bagAdd n e (playerSeeds p) }
 
+-- | Take a driud from the player's supply.
 prepareToSummon :: DruidName -> Player -> Maybe (Druid, Player)
 prepareToSummon nm p =
   case Set.partition ((nm ==) . druidName) (playerSupply p) of
     (as,bs) -> do (a,_) <- Set.minView as
                   return (a, p { playerSupply = bs })
+
+-- | Return a druid to a player's supply.
+-- The druid should belong to the player.
+returnDruid :: ActiveDruid -> Player -> Player
+returnDruid a p = p { playerSupply = Set.insert (druidStatic a)
+                                                (playerSupply p) }
+
+addUnravelled :: ActivePlace -> Player -> Player
+addUnravelled a p = p { playerUnravelled = Set.insert (placeStatic a)
+                                                      (playerUnravelled p) }
+
 
 --------------------------------------------------------------------------------
 -- Active Place
